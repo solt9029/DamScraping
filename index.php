@@ -3,14 +3,13 @@ require_once "phpQuery/phpQuery.php";
 
 $csv = getCsv('./data/musics.csv');
 
-$html = selectCodeWhereAuthorAndKeyword('前前前世', 'RADWINPS');
+for($i=0; $i<count($csv); $i++){
+    $code = getCodeWhereArtistAndKeyword($csv[$i][0], $csv[$i][1]);
+    $csv[$i][] = $code[0];
+    $csv[$i][] = $code[1];
+}
 
-$doc = phpQuery::newDocument($html);
-
-var_dump($doc[".list tr"]->length - 1);//出てくるtr要素の数(一番上はタイトルとかなので除くよ)
-
-var_dump($doc[".list tr:eq(1) td:eq(2)"]->text());//曲のコード
-var_dump($doc[".list tr:eq(1) td:eq(1)"]->text());//歌っている人
+setCsv('./output/musics.csv', $csv);
 
 //csvファイルを取得する
 function getCsv ($filename) {
@@ -33,7 +32,7 @@ function getHtmlWithPost ($url, $data = array()) {
     return $html;
 }
 
-function selectCodeWhereAuthorAndKeyword ($keyword, $author) {
+function getCodeWhereArtistAndKeyword ($keyword, $artist) {
     $url = 'http://www.clubdam.com/app/search/searchKeywordKaraoke.html';
     $data = array(
         'keyword' => $keyword,
@@ -44,6 +43,48 @@ function selectCodeWhereAuthorAndKeyword ($keyword, $author) {
     );
 
     $html = getHtmlWithPost($url, $data);
+    $doc = phpQuery::newDocument($html);
 
-    return $html;
+    $result = array();
+
+    //完全に一致するとき
+    for ($i=1; $i<$doc[".list tr"]->length+1; $i++) {
+        $current_code_index = ".list tr:eq(".$i.") td:eq(2)";
+        $current_artist_index = ".list tr:eq(".$i.") td:eq(1)";
+
+        $current_code = $doc[$current_code_index]->text();
+        $current_artist = $doc[$current_artist_index]->text();
+
+        if($artist === $current_artist){
+            return array($current_code, '完全一致');
+        }
+    }
+
+    //その文字が含まれるとき（歌手）
+    for ($i=1; $i<$doc[".list tr"]->length; $i++) {
+        $current_code_index = ".list tr:eq(".$i.") td:eq(2)";
+        $current_artist_index = ".list tr:eq(".$i.") td:eq(1)";
+
+        $current_code = $doc[$current_code_index]->text();
+        $current_artist = $doc[$current_artist_index]->text();
+
+        if(mb_strpos($artist, $current_artist) >= 0){
+            return array($current_code, '一部一致');
+        }
+    }
+
+    return array('一致無し', '一致無し');
+}
+
+function setCsv ($filename, $csv) {
+    $data = '';
+
+    foreach($csv as $values){
+        $line = implode(",", $values);
+        $line.="\n";
+        $data.=$line;
+    }
+
+    mb_convert_encoding($data, "SJIS", "UTF-8");
+    file_put_contents($filename, $data);
 }
